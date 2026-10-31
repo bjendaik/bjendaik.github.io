@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LuxPower SNA - Cloud Multi-Device Dashboard</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1120; --card: #151f32; --border: #263554; --text: #e2e8f0; --muted: #94a3b8;
+      --accent: #38bdf8; --solar: #f59e0b; --bat: #10b981; --grid: #a855f7; --load: #3b82f6; --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+    header {
+      background: linear-gradient(135deg, #0f172a, #1e293b); border-bottom: 1px solid var(--border);
+      padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; position: sticky; top: 0; z-index: 100; min-height: 60px; flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; font-weight: 800; color: #fff; }
+    .brand span.hl { color: var(--solar); }
+    
+    .device-selector {
+      background: #0f172a; color: #38bdf8; border: 1px solid var(--border);
+      padding: 6px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 700;
+      outline: none; cursor: pointer; max-width: 260px; text-overflow: ellipsis;
+    }
+    .device-selector:focus { border-color: var(--accent); }
+
+    .status-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .badge {
+      padding: 4px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 5px; background: #1e293b; border: 1px solid var(--border);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.2s; }
+    .dot.ok { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .dot.err { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+    @keyframes flashDotAnim {
+      0% { background: #34d399; box-shadow: 0 0 16px 4px #34d399; transform: scale(1.6); }
+      50% { background: #a7f3d0; box-shadow: 0 0 22px 6px #34d399; transform: scale(1.8); }
+      100% { background: #10b981; box-shadow: 0 0 6px #10b981; transform: scale(1); }
+    }
+    .dot.flash { animation: flashDotAnim 0.5s ease-out; }
+
+    .sb-tgl {
+      display: none; background: #1e293b; border: 1px solid var(--border); color: var(--text);
+      font-size: 1.15rem; width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+      align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    @media (min-width: 901px) { .sb-tgl.d { display: inline-flex; } }
+    @media (max-width: 900px) { .sb-tgl.m { display: inline-flex; } }
+
+    .layout { display: flex; min-height: calc(100vh - 60px); }
+    .sidebar {
+      width: 240px; flex-shrink: 0; background: #0f172a; border-right: 1px solid var(--border);
+      padding: 16px 12px; position: sticky; top: 60px; height: calc(100vh - 60px);
+      overflow-y: auto; transition: width 0.25s, transform 0.25s;
+    }
+    .sidebar.collapsed { width: 64px; padding: 16px 8px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-footer { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding: 12px 0; }
+    .sidebar-title {
+      font-size: 0.68rem; text-transform: uppercase; color: var(--muted); font-weight: 700;
+      letter-spacing: 0.6px; padding: 0 8px 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 4px;
+      border-radius: 10px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 0.9rem;
+      transition: all 0.15s; border: 1px solid transparent; white-space: nowrap; overflow: hidden;
+    }
+    .nav-item:hover { background: #1e293b; color: var(--text); }
+    .nav-item.active { background: var(--accent); color: #0f172a; border-color: var(--accent); font-weight: 700; }
+    .nav-icon { font-size: 1.1rem; flex-shrink: 0; width: 22px; text-align: center; }
+    .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-footer { margin-top: 16px; padding: 10px 8px; font-size: 0.72rem; color: var(--muted); border-top: 1px solid var(--border); line-height: 1.6; }
+    .main { flex: 1; min-width: 0; padding: 18px; }
+    .sb-ov { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 150; }
+    .sb-ov.open { display: block; }
+
+    @media (max-width: 900px) {
+      .sidebar {
+        position: fixed; top: 0; left: 0; height: 100vh; z-index: 200; transform: translateX(-100%);
+        width: 260px; box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5); padding: 16px 12px;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar.collapsed { width: 260px; padding: 16px 12px; }
+      .sidebar.collapsed .nav-label,
+      .sidebar.collapsed .sidebar-title,
+      .sidebar.collapsed .sidebar-footer { display: block; }
+      .sidebar.collapsed .nav-item { justify-content: flex-start; padding: 12px 14px; }
+      .main { padding: 12px; }
+    }
+
+    .power-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 16px; }
+    @media (min-width: 1100px) { .power-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 600px) { .power-grid { grid-template-columns: 1fr; } }
+    .power-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 18px 16px; position: relative; overflow: hidden; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    }
+    .power-card::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 5px; }
+    .power-card.pv::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .power-card.bat::before { background: linear-gradient(90deg, #10b981, #34d399); }
+    .power-card.grid::before { background: linear-gradient(90deg, #a855f7, #c084fc); }
+    .power-card.load::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .pc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 6px; }
+    .pc-title { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pc-icon { font-size: 1.3rem; }
+    .pc-tag { font-size: 0.7rem; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+    .pc-value { font-size: 2.1rem; font-weight: 800; color: #fff; line-height: 1; margin-bottom: 4px; }
+    .pc-value small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+    .pc-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.45; }
+    .pc-rows { border-top: 1px dashed rgba(255, 255, 255, 0.08); padding-top: 8px; }
+    .pc-row { display: flex; justify-content: space-between; font-size: 0.79rem; padding: 3.5px 0; gap: 8px; }
+    .pc-row span:first-child { color: var(--muted); }
+    .pc-row span:last-child { font-weight: 600; color: #f8fafc; text-align: right; }
+    .soc-bar { height: 10px; background: #0f172a; border-radius: 999px; overflow: hidden; margin: 8px 0 10px; border: 1px solid var(--border); }
+    .soc-fill { height: 100%; background: linear-gradient(90deg, #059669, #34d399); transition: width 0.4s; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .stat-label { font-size: 0.72rem; text-transform: uppercase; color: var(--muted); font-weight: 700; letter-spacing: 0.4px; margin-bottom: 6px; }
+    .stat-val { font-size: 1.35rem; font-weight: 800; color: #fff; }
+    .stat-val small { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .stat-box.pv .stat-val { color: var(--solar); }
+    .stat-box.bat .stat-val { color: var(--bat); }
+    .stat-box.grid .stat-val { color: var(--grid); }
+    .stat-box.load .stat-val { color: var(--load); }
+
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+    .chart-title { font-size: 0.9rem; font-weight: 700; }
+    .chart-wrap { position: relative; width: 100%; height: 260px; }
+    .chart-svg { width: 100%; height: 100%; display: block; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25); position: relative; overflow: hidden;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+    .card-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    .form-group input {
+      width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: #0b1120; color: #fff; font-size: 0.92rem; outline: none;
+    }
+    .form-group input:focus { border-color: var(--accent); }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .btn-row { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
+    .btn { padding: 10px 20px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: opacity 0.2s; }
+    .btn:hover:not(:disabled) { opacity: 0.9; }
+    .btn-primary { background: var(--accent); color: #0f172a; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: #334155; color: #fff; }
+
+    .reg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+    .reg-item {
+      background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      font-size: 0.82rem; cursor: pointer; user-select: none; transition: all 0.15s;
+    }
+    .reg-item:hover { background: #16233b; }
+    .reg-item.on { border-color: #10b981; background: rgba(16, 185, 129, 0.08); }
+    .reg-item.tele { border-left: 3px solid #38bdf8; }
+    .reg-idx { color: var(--muted); font-weight: 600; font-size: 0.7rem; }
+    .reg-name { color: #cbd5e1; font-weight: 600; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .reg-val { color: var(--accent); font-family: monospace; font-weight: 700; }
+    .reg-toggle {
+      width: 32px; height: 18px; background: #334155; border-radius: 999px;
+      position: relative; flex-shrink: 0; transition: background 0.2s;
+    }
+    .reg-toggle::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+      background: #94a3b8; border-radius: 50%; transition: all 0.2s;
+    }
+    .reg-item.on .reg-toggle { background: #10b981; }
+    .reg-item.on .reg-toggle::after { left: 16px; background: #fff; }
+
+    .eye-btn { position: absolute; right: 8px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 4px; user-select: none; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; background: #10b981; color: #06281e;
+      padding: 12px 20px; border-radius: 10px; font-weight: 700; display: none; z-index: 300;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <button class="sb-tgl d" onclick="tglSbD()">☰</button>
+    <button class="sb-tgl m" onclick="openSbM()">☰</button>
+    <div class="brand">⚡ LUXPOWER <span class="hl">SNA</span></div>
+    <select id="selDevice" class="device-selector" onchange="onDeviceSelected(this.value)">
+      <option value="">⏳ Đợi thiết bị...</option>
+    </select>
+  </div>
+  <div class="status-bar">
+    <div class="badge"><span class="dot" id="dotInv"></span><span id="txtInvStatus">INV: OFF</span></div>
+    <div class="badge"><span class="dot" id="dotMqtt"></span><span id="txtMqttStatus">MQTT: OFF</span></div>
+    <div class="badge">S3: <span id="txtS3Temp">--</span>°C</div>
+    <div class="badge">WiFi: <span id="txtRssi">--</span> dBm</div>
+  </div>
+</header>
+
+<div class="sb-ov" id="sbOv" onclick="closeSbM()"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-title">Giám sát</div>
+    <div class="nav-item active" data-tab="tabMonitor" onclick="swTab('tabMonitor',this)">
+      <span class="nav-icon">📊</span><span class="nav-label">Theo Dõi Biến Tần</span>
+    </div>
+    <div class="sidebar-title" style="margin-top:14px;">Cài đặt từ xa (MQTT)</div>
+    <div class="nav-item" data-tab="tabRegs" onclick="swTab('tabRegs',this)">
+      <span class="nav-icon">🔢</span><span class="nav-label">Thanh Ghi &amp; Field</span>
+    </div>
+    <div class="nav-item" data-tab="tabCfgOta" onclick="swTab('tabCfgOta',this)">
+      <span class="nav-icon">🔄</span><span class="nav-label">Cập Nhật Firmware</span>
+    </div>
+    <div class="sidebar-title" style="margin-top:14px;">Cấu hình Web</div>
+    <div class="nav-item" data-tab="tabWssCfg" onclick="swTab('tabWssCfg',this)">
+      <span class="nav-icon">🔑</span><span class="nav-label">Kết Nối Broker WSS</span>
+    </div>
+    <div class="sidebar-footer">
+      <div>Điều khiển từ xa ESP32-S3</div>
+      <div style="margin-top:4px; font-family:monospace; color:#38bdf8; font-size:.7rem;" id="txtSidebarMac">--</div>
+      <div>GitHub Pages WSS</div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- TAB 1: THEO DÕI BIẾN TẦN -->
+    <div id="tabMonitor" class="tab-content active">
+      <div class="power-grid">
+        <!-- SOLAR PV -->
+        <div class="power-card pv">
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">☀️</span> SOLAR</div>
+            <div class="pc-tag" id="tagPvDay">-- kWh</div>
+          </div>
+          <div class="pc-value"><span id="valPvTotal">0</span> <small>W</small></div>
+          <div class="pc-sub"><strong>PV1:</strong> <span id="valPv1P">0</span> W · <strong>PV2:</strong> <span id="valPv2P">0</span> W</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>PV1 (Điện áp · Dòng)</span><span><span id="valPv1V">0.0 V</span> · <span id="valPv1I" style="color:#fbbf24;">0.0 A</span></span></div>
+            <div class="pc-row"><span>PV2 (Điện áp · Dòng)</span><span><span id="valPv2V">0.0 V</span> · <span id="valPv2I" style="color:#fbbf24;">0.0 A</span></span></div>
+            <div class="pc-row"><span>Sản lượng PV1 / PV2</span><span><span id="valEpv1Day">0.0</span> / <span id="valEpv2Day">0.0</span> kWh</span></div>
+            <div class="pc-row"><span>Điện áp DC Bus 1 / 2</span><span><span id="valBus1">0.0</span> / <span id="valBus2">0.0</span> V</span></div>
+            <div class="pc-row"><span>Tổng PV phát hôm nay</span><span id="valEpvDay" style="color:var(--solar);">0.0 kWh</span></div>
+          </div>
+        </div>
+
+        <!-- BATTERY & BMS -->
+        <div class="power-card bat">
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">🔋</span> BATTERY</div>
+            <div class="pc-tag" id="tagBatState">Standby</div>
+          </div>
+          <div class="pc-value"><span id="valSoc">0</span> <small>% SOC</small></div>
+          <div class="soc-bar"><div class="soc-fill" id="barSoc"></div></div>
+          <div class="pc-sub"><strong>Điện áp:</strong> <span id="valVbat">0.0</span> V · <strong>Nhiệt độ:</strong> <span id="valTbat">0</span>°C</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>Dòng điện Pin (Net)</span><span id="valIbat" style="font-weight:700;">0.0 A</span></div>
+            <div class="pc-row"><span>Công suất Sạc / Xả</span><span><span id="valPchg">0 W</span> / <span id="valPdis">0 W</span></span></div>
+            <div class="pc-row"><span>Sạc / Xả hôm nay</span><span><span id="valEchg">0.0</span> / <span id="valEdis">0.0</span> kWh</span></div>
+            <div class="pc-row"><span>Sức khỏe (SOH) / Chu kỳ</span><span><span id="valSoh">--</span>% · <span id="valBatCycle">--</span> cycle</span></div>
+            <div class="pc-row"><span>Điện áp Cell (Min / Max)</span><span><span id="valCellMinV">--</span> / <span id="valCellMaxV">--</span> mV</span></div>
+            <div class="pc-row"><span>Nhiệt độ Cell (Min / Max)</span><span><span id="valCellMinT">--</span> / <span id="valCellMaxT">--</span> °C</span></div>
+            <div class="pc-row"><span>Giới hạn BMS (Nạp / Xả)</span><span><span id="valBmsMaxChg">--</span>A / <span id="valBmsMaxDis">--</span>A</span></div>
+          </div>
+        </div>
+
+        <!-- GRID -->
+        <div class="power-card grid">
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">🗼</span> GRID</div>
+            <div class="pc-tag" id="tagGridState">--</div>
+          </div>
+          <div class="pc-value"><span id="valPgridNet">0</span> <small>W</small></div>
+          <div class="pc-sub"><strong>Điện áp:</strong> <span id="valVgrid">0.0</span> V · <strong>Dòng lưới:</strong> <span id="valIgridNet">0.0</span> A</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>Tần số lưới</span><span id="valFgrid">0.00 Hz</span></div>
+            <div class="pc-row"><span>Mua lưới (W · A)</span><span><span id="valPtoUser">0 W</span> (<span id="valItoUser" style="color:#94a3b8;">0.0 A</span>)</span></div>
+            <div class="pc-row"><span>Đẩy lưới (W · A)</span><span><span id="valPtoGrid">0 W</span> (<span id="valItoGrid" style="color:#94a3b8;">0.0 A</span>)</span></div>
+            <div class="pc-row"><span>Chỉnh lưu nạp pin (AC->DC)</span><span id="valPrec">0 W</span></div>
+            <div class="pc-row"><span>Mua / Bán hôm nay</span><span><span id="valEtoUser">0.0</span> / <span id="valEtoGrid">0.0</span> kWh</span></div>
+            <div class="pc-row"><span>Lưới sạc pin hôm nay</span><span id="valErecDay">0.0 kWh</span></div>
+          </div>
+        </div>
+
+        <!-- LOAD & EPS BACKUP -->
+        <div class="power-card load">
+          <div class="pc-header">
+            <div class="pc-title"><span class="pc-icon">🏠</span> LOAD</div>
+            <div class="pc-tag">Status: <span id="valStatus">0</span></div>
+          </div>
+          <div class="pc-value"><span id="valPload">0</span> <small>W</small></div>
+          <div class="pc-sub"><strong>Dòng tải:</strong> <span id="valIload">0.0</span> A · <strong>Inverter:</strong> <span id="valPinv">0</span> W</div>
+          <div class="pc-rows">
+            <div class="pc-row"><span>Ngõ ra khẩn cấp (EPS)</span><span><span id="valPeps">0 W</span> (<span id="valSeps">0 VA</span>)</span></div>
+            <div class="pc-row"><span>Điện áp & Tần số EPS</span><span><span id="valVeps">0.0 V</span> · <span id="valFeps">0.00 Hz</span></span></div>
+            <div class="pc-row"><span>Tiêu thụ tải hôm nay</span><span id="valEload" style="color:var(--load);">0.0 kWh</span></div>
+            <div class="pc-row"><span>Sản lượng EPS hôm nay</span><span id="valEepsDay">0.0 kWh</span></div>
+            <div class="pc-row"><span>Sản lượng Inv hôm nay</span><span id="valEinvDay">0.0 kWh</span></div>
+            <div class="pc-row"><span>Nhiệt độ trong / Tản 1 / 2</span><span><span id="valTinner">0</span> / <span id="valTrad1">0</span> / <span id="valTrad2">0</span> °C</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-box pv"><div class="stat-label">☀️ PV sản xuất</div><div class="stat-val"><span id="statPvDay">0.0</span> <small>kWh</small></div></div>
+        <div class="stat-box bat"><div class="stat-label">🔋 Pin nạp / xả</div><div class="stat-val"><span id="statBatNet">+0.0</span> <small>kWh</small></div></div>
+        <div class="stat-box grid"><div class="stat-label">🗼 Lưới</div><div class="stat-val"><span id="statGridNet">0.0</span> <small>kWh</small></div></div>
+        <div class="stat-box load"><div class="stat-label">🏠 Tải tiêu thụ</div><div class="stat-val"><span id="statLoadDay">0.0</span> <small>kWh</small></div></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header"><div class="chart-title">📈 Công Suất Thời Gian Thực</div></div>
+        <div class="chart-wrap"><svg class="chart-svg" id="powerChart" viewBox="0 0 800 260" preserveAspectRatio="none"></svg></div>
+      </div>
+    </div>
+
+    <!-- TAB 2: THANH GHI & FIELD -->
+    <div id="tabRegs" class="tab-content">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <span class="card-title">📡 Field Telemetry (Tự động đồng bộ theo trạm đang chọn)</span>
+          <span class="badge" id="teleCount">0 / 20</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="remoteToggleAllTele(true)">✅ Bật tất cả</button>
+          <button class="btn btn-secondary" onclick="remoteToggleAllTele(false)">⬜ Tắt tất cả</button>
+        </div>
+        <div class="reg-grid" id="teleContainer"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔢 120 Thanh Ghi Modbus (Tự động đồng bộ theo trạm đang chọn)</span>
+          <span class="badge" id="regCount">0 / 120</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="remoteToggleAllRegs(true)">✅ Bật tất cả</button>
+          <button class="btn btn-secondary" onclick="remoteToggleAllRegs(false)">⬜ Tắt tất cả</button>
+        </div>
+        <div class="reg-grid" id="regContainer"></div>
+      </div>
+    </div>
+
+    <!-- TAB 3: CẬP NHẬT FIRMWARE OTA TỪ XA -->
+    <div id="tabCfgOta" class="tab-content">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <span class="card-title">📦 Thông Tin Phiên Bản Thiết Bị</span>
+          <span class="badge" id="badgeOtaStatus">Đang đồng bộ...</span>
+        </div>
+        <div class="pc-row" style="padding:8px 0; border-bottom:1px solid #1e293b;">
+          <span style="color:var(--muted);">Phiên bản đang chạy trên trạm:</span>
+          <span style="font-weight:700; color:#38bdf8; font-size:1rem;" id="txtCurFwVer">v--</span>
+        </div>
+        <div class="pc-row" style="padding:8px 0; border-bottom:1px solid #1e293b;">
+          <span style="color:var(--muted);">Địa chỉ MAC thiết bị:</span>
+          <span style="font-family:monospace; color:#34d399;" id="txtOtaDevMac">--</span>
+        </div>
+        <div class="pc-row" style="padding:8px 0;">
+          <span style="color:var(--muted);">URL update.json (Lưu trong ESP32):</span>
+          <span style="font-family:monospace; color:#cbd5e1; font-size:0.75rem; word-break:break-all;" id="txtOtaUrlConfig">--</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔄 Trạng Thái Cập Nhật Online</span>
+        </div>
+        
+        <div id="otaUpdateBox" style="padding:14px; background:#0f172a; border-radius:10px; margin-bottom:16px; border:1px solid var(--border);">
+          <div id="otaMsg">Đang chờ thông tin từ thiết bị... Nhấn nút bên dưới để kiểm tra bản mới.</div>
+        </div>
+
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="btnCheckUpdate" onclick="checkRemoteUpdate()">🔍 Kiểm Tra Bản Mới</button>
+          <button type="button" class="btn btn-primary" id="btnDoOta" style="display:none; background:#059669;" onclick="triggerAutoOta()">🚀 Cập Nhật Ngay</button>
+          <button type="button" class="btn btn-danger" onclick="remoteRebootEsp()">🔄 Khởi Động Lại ESP32</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: CẤU HÌNH WSS BROKER -->
+    <div id="tabWssCfg" class="tab-content">
+      <form onsubmit="connectWssBroker(event)">
+        <div class="card">
+          <div class="card-header"><span class="card-title">🔑 Cấu Hình Kết Nối MQTT WebSocket (WSS)</span></div>
+          <div class="form-grid">
+            <div class="form-group"><label>Host Broker (Domain)</label><input type="text" id="wssHost" placeholder="xxx.s1.eu.hivemq.cloud" required></div>
+            <div class="form-group"><label>Port WSS (HiveMQ: 8884, EMQX: 8084)</label><input type="number" id="wssPort" value="8884" required></div>
+            <div class="form-group"><label>Topic nhận dữ liệu (State Topic)</label><input type="text" id="wssTopic" value="luxpower/sna/state" required></div>
+            <div class="form-group"><label>Username</label><input type="text" id="wssUser"></div>
+            <div class="form-group">
+              <label>Password</label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="wssPass" style="padding-right:40px;">
+                <button type="button" class="eye-btn" onclick="tglPwd('wssPass', this)">👁️</button>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary" id="btnWssConnect">🔗 Kết Nối Broker WSS</button>
+            <button type="button" class="btn btn-danger" onclick="disconnectWssBroker()">🔌 Ngắt Kết Nối</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toastBox">Đã gửi lệnh!</div>
+
+<script>
+let client = null;
+let stateTopic = "luxpower/sna/state";
+let cmdTopic = "luxpower/sna/state/set";
+let heartBeatTimer = null;
+let chartPoints = [];
+
+// Quản lý đa thiết bị theo MAC
+let discoveredDevices = {};
+let selectedMac = "";
+
+let currentOtaUrl = "";
+let currentFwVersion = "";
+
+const TELE_NAMES = [
+  "online","mqtt_connected","mqtt_tls","wifi_rssi","s3_temp","cpu_mhz","free_heap","psram_free","psram_total","flash_size",
+  "uptime_s","ip","poll_interval","poll_ok","poll_err","p_pv_total","p_bat_net","p_load","e_pv_day_total","e_load_day"
+];
+
+const REG_NAMES = [
+  "status","v_pv1","v_pv2","v_pv3","v_bat","soc_soh","v_bat_alt","p_pv1","p_pv2","p_pv3","p_charge","p_discharge",
+  "v_grid","v_grid_L2","v_grid_L3","f_grid","p_inv","p_rec","v_eps_L1","v_eps_L2","v_eps","v_eps_L3","f_eps","f_eps_alt",
+  "p_eps","s_eps","p_to_grid","p_to_user","e_pv1_day","e_pv2_day","e_pv3_day","e_inv_day","e_rec_day","e_chg_day","e_dischg_day","e_eps_day",
+  "e_to_grid_day","e_to_user_day","v_bus1","v_bus2","rsv_40","rsv_41","rsv_42","rsv_43","rsv_44","rsv_45","rsv_46","rsv_47",
+  "rsv_48","rsv_49","rsv_50","rsv_51","rsv_52","rsv_53","rsv_54","rsv_55","rsv_56","rsv_57","rsv_58","rsv_59",
+  "rsv_60","rsv_61","rsv_62","rsv_63","t_inner","t_rad1","t_rad2","t_bat","t_bat_max_chg","t_bat_min_chg","rsv_70","rsv_71",
+  "rsv_72","rsv_73","rsv_74","rsv_75","rsv_76","rsv_77","rsv_78","rsv_79","bms_chg_volt_ref","bms_dis_cut_volt","bms_max_chg_curr","bms_max_dis_curr",
+  "bms_chg_curr","bms_dis_curr","bms_cell_min_v","bms_cell_max_v","bms_cell_min_t","bms_cell_max_t","bms_soc","bms_soh","bms_cycle","bms_volt",
+  "bms_curr","bms_temp","rsv_96","rsv_97","rsv_98","rsv_99","rsv_100","rsv_101","rsv_102","rsv_103","rsv_104","rsv_105",
+  "rsv_106","rsv_107","rsv_108","rsv_109","rsv_110","rsv_111","rsv_112","rsv_113","rsv_114","rsv_115","rsv_116","rsv_117","rsv_118","rsv_119"
+];
+
+function swTab(id, el) {
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (el) el.classList.add('active');
+  if (window.innerWidth <= 900) closeSbM();
+  if (id === 'tabMonitor') setTimeout(drawChart, 100);
+}
+function tglSbD() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+function openSbM() { document.getElementById('sidebar').classList.add('open'); document.getElementById('sbOv').classList.add('open'); }
+function closeSbM() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sbOv').classList.remove('open'); }
+function tglPwd(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁️'; }
+}
+function toast(m, err) {
+  const t = document.getElementById('toastBox');
+  t.textContent = m; t.style.background = err ? '#ef4444' : '#10b981';
+  t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000);
+}
+function fmtN(n, d=0) { if (isNaN(n)) n=0; return Number(n).toLocaleString('vi-VN', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+function flashDot(el) { if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+
+function initGrids() {
+  let ht = '';
+  for (let i = 0; i < TELE_NAMES.length; i++) {
+    ht += `<div class="reg-item tele" data-tele="${TELE_NAMES[i]}" onclick="remoteToggleTele(${i}, '${TELE_NAMES[i]}')">
+      <div><div class="reg-idx">F${i}</div><div class="reg-name">${TELE_NAMES[i]}</div></div>
+      <div class="reg-toggle"></div></div>`;
+  }
+  document.getElementById('teleContainer').innerHTML = ht;
+
+  let hr = '';
+  for (let i = 0; i < REG_NAMES.length; i++) {
+    hr += `<div class="reg-item" data-reg="${REG_NAMES[i]}" onclick="remoteToggleReg(${i}, '${REG_NAMES[i]}')">
+      <div><div class="reg-idx">R${i}</div><div class="reg-name">${REG_NAMES[i]}</div><div class="reg-val" id="rval_${i}">0</div></div>
+      <div class="reg-toggle"></div></div>`;
+  }
+  document.getElementById('regContainer').innerHTML = hr;
+}
+
+function loadSavedWss() {
+  document.getElementById('wssHost').value = localStorage.getItem('lx_wss_host') || '';
+  document.getElementById('wssPort').value = localStorage.getItem('lx_wss_port') || '8884';
+  document.getElementById('wssTopic').value = localStorage.getItem('lx_wss_topic') || 'luxpower/sna/state';
+  document.getElementById('wssUser').value = localStorage.getItem('lx_wss_user') || '';
+  document.getElementById('wssPass').value = localStorage.getItem('lx_wss_pass') || '';
+  if (document.getElementById('wssHost').value.trim() !== '') connectWssBroker();
+}
+
+function publishMqttCommand(payload) {
+  if (!client || !client.connected) {
+    toast('Chưa kết nối WSS Broker!', true);
+    return;
+  }
+  if (selectedMac) payload.target = selectedMac;
+  client.publish(cmdTopic, JSON.stringify(payload), { qos: 1 });
+  toast('Đã gửi lệnh tới trạm [' + (selectedMac || 'Tất cả') + ']!');
+}
+
+function sendHeartbeatOnline() {
+  if (client && client.connected) {
+    client.publish(cmdTopic, JSON.stringify({ cmd: "web_online" }), { qos: 1 });
+  }
+}
+
+function connectWssBroker(e) {
+  if (e) e.preventDefault();
+  if (client && client.connected) client.end();
+  if (heartBeatTimer) clearInterval(heartBeatTimer);
+
+  const host = document.getElementById('wssHost').value.trim();
+  const port = parseInt(document.getElementById('wssPort').value) || 8884;
+  const tState = document.getElementById('wssTopic').value.trim();
+  const user = document.getElementById('wssUser').value.trim();
+  const pass = document.getElementById('wssPass').value;
+
+  localStorage.setItem('lx_wss_host', host);
+  localStorage.setItem('lx_wss_port', port);
+  localStorage.setItem('lx_wss_topic', tState);
+  localStorage.setItem('lx_wss_user', user);
+  localStorage.setItem('lx_wss_pass', pass);
+
+  stateTopic = tState;
+  cmdTopic = tState + "/set";
+
+  const dot = document.getElementById('dotMqtt');
+  const txt = document.getElementById('txtMqttStatus');
+  dot.className = 'dot';
+  txt.textContent = 'MQTT: KẾT NỐI...';
+
+  const wssUrl = `wss://${host}:${port}/mqtt`;
+  const options = {
+    clientId: 'WebCloud-' + Math.random().toString(16).substr(2, 8),
+    clean: true,
+    connectTimeout: 8000
+  };
+  if (user) options.username = user;
+  if (pass) options.password = pass;
+
+  try {
+    client = mqtt.connect(wssUrl, options);
+
+    client.on('connect', () => {
+      dot.className = 'dot ok';
+      txt.textContent = 'MQTT: ON';
+      client.subscribe(stateTopic);
+      toast('Đã kết nối Broker WSS!');
+
+      sendHeartbeatOnline();
+      heartBeatTimer = setInterval(sendHeartbeatOnline, 20000);
+    });
+
+    client.on('message', (t, payload) => {
+      handleIncomingMqttMessage(t, payload);
+    });
+
+    client.on('close', () => {
+      dot.className = 'dot err';
+      txt.textContent = 'MQTT: MẤT KẾT NỐI';
+    });
+  } catch(err) {
+    dot.className = 'dot err';
+    txt.textContent = 'MQTT: LỖI';
+  }
+}
+
+function disconnectWssBroker() {
+  if (client) {
+    client.end();
+    if (heartBeatTimer) clearInterval(heartBeatTimer);
+    document.getElementById('dotMqtt').className = 'dot';
+    document.getElementById('txtMqttStatus').textContent = 'MQTT: OFF';
+    toast('Đã ngắt kết nối WSS');
+  }
+}
+
+function handleIncomingMqttMessage(t, payload) {
+  if (t !== stateTopic) return;
+  try {
+    const d = JSON.parse(payload.toString());
+    const mac = d.mac || d.mac_clean;
+    if (!mac) return;
+
+    const devName = d.device_name || "Trạm " + mac.slice(-5);
+    const isNew = !discoveredDevices[mac];
+    discoveredDevices[mac] = d;
+
+    const sel = document.getElementById('selDevice');
+    if (isNew) {
+      if (Object.keys(discoveredDevices).length === 1) sel.innerHTML = '';
+      const opt = document.createElement('option');
+      opt.value = mac;
+      opt.textContent = `📍 ${devName}`;
+      sel.appendChild(opt);
+
+      if (!selectedMac) {
+        selectedMac = mac;
+        sel.value = mac;
+      }
+    } else {
+      for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === mac) {
+          sel.options[i].textContent = `📍 ${devName}`;
+          break;
+        }
+      }
+    }
+
+    if (mac === selectedMac) {
+      renderIncomingData(d);
+      const dot = document.getElementById('dotMqtt');
+      if (dot) flashDot(dot);
+    }
+  } catch(err) {
+    console.error("Lỗi parse MQTT:", err);
+  }
+}
+
+function onDeviceSelected(mac) {
+  selectedMac = mac;
+  chartPoints = [];
+  if (discoveredDevices[mac]) {
+    renderIncomingData(discoveredDevices[mac]);
+    toast('Đang xem: ' + (discoveredDevices[mac].device_name || mac));
+  }
+}
+
+function updateOtaInfo(d) {
+  if (d.fw_version) {
+    currentFwVersion = d.fw_version;
+    document.getElementById('txtCurFwVer').textContent = "v" + d.fw_version;
+  }
+  if (d.mac) {
+    document.getElementById('txtOtaDevMac').textContent = d.mac;
+  }
+  if (d.ota_url) {
+    currentOtaUrl = d.ota_url;
+    document.getElementById('txtOtaUrlConfig').textContent = d.ota_url;
+  }
+}
+
+function renderIncomingData(d) {
+  updateOtaInfo(d);
+
+  const mac = d.mac || selectedMac;
+  const sbMac = document.getElementById('txtSidebarMac');
+  if (sbMac) sbMac.textContent = mac;
+
+  const di = document.getElementById('dotInv'), ti = document.getElementById('txtInvStatus');
+  if (d.online) { di.className = 'dot ok'; ti.textContent = 'INV: ON'; flashDot(di); }
+  else { di.className = 'dot err'; ti.textContent = 'INV: OFF'; }
+
+  document.getElementById('txtS3Temp').textContent = d.s3_temp !== undefined ? d.s3_temp.toFixed(1) : '--';
+  document.getElementById('txtRssi').textContent = d.wifi_rssi !== undefined ? d.wifi_rssi : '--';
+
+  // 1. Solar
+  document.getElementById('valPvTotal').textContent = fmtN(d.p_pv_total);
+  document.getElementById('valPv1P').textContent = fmtN(d.p_pv1);
+  document.getElementById('valPv2P').textContent = fmtN(d.p_pv2);
+  document.getElementById('valPv1V').textContent = (d.v_pv1 || 0).toFixed(1) + ' V';
+  document.getElementById('valPv2V').textContent = (d.v_pv2 || 0).toFixed(1) + ' V';
+  document.getElementById('valEpvDay').textContent = (d.e_pv_day_total || 0).toFixed(1) + ' kWh';
+  document.getElementById('tagPvDay').textContent = (d.e_pv_day_total || 0).toFixed(1) + ' kWh';
+
+  const ipv1 = (d.v_pv1 > 15 && d.p_pv1 > 0) ? (d.p_pv1 / d.v_pv1) : 0;
+  const ipv2 = (d.v_pv2 > 15 && d.p_pv2 > 0) ? (d.p_pv2 / d.v_pv2) : 0;
+  document.getElementById('valPv1I').textContent = ipv1.toFixed(1) + ' A';
+  document.getElementById('valPv2I').textContent = ipv2.toFixed(1) + ' A';
+  document.getElementById('valEpv1Day').textContent = d.e_pv1_day !== undefined ? d.e_pv1_day.toFixed(1) : (d.regs && d.regs[28] ? (d.regs[28]/10).toFixed(1) : '0.0');
+  document.getElementById('valEpv2Day').textContent = d.e_pv2_day !== undefined ? d.e_pv2_day.toFixed(1) : (d.regs && d.regs[29] ? (d.regs[29]/10).toFixed(1) : '0.0');
+  document.getElementById('valBus1').textContent = d.v_bus1 !== undefined ? d.v_bus1.toFixed(1) : (d.regs && d.regs[38] ? (d.regs[38]/10).toFixed(1) : '0.0');
+  document.getElementById('valBus2').textContent = d.v_bus2 !== undefined ? d.v_bus2.toFixed(1) : (d.regs && d.regs[39] ? (d.regs[39]/10).toFixed(1) : '0.0');
+
+  // 2. Battery
+  document.getElementById('valSoc').textContent = d.soc || 0;
+  document.getElementById('barSoc').style.width = Math.min(100, Math.max(0, d.soc || 0)) + '%';
+  document.getElementById('valVbat').textContent = (d.v_bat || 0).toFixed(1);
+  document.getElementById('valTbat').textContent = d.t_bat !== undefined ? d.t_bat : (d.regs && d.regs[67] ? d.regs[67] : 0);
+  document.getElementById('valPchg').textContent = fmtN(d.p_charge) + ' W';
+  document.getElementById('valPdis').textContent = fmtN(d.p_discharge) + ' W';
+  document.getElementById('valEchg').textContent = (d.e_chg_day || 0).toFixed(1);
+  document.getElementById('valEdis').textContent = (d.e_dischg_day || 0).toFixed(1);
+
+  let ibat = 0;
+  if (d.v_bat > 20) {
+    if (d.p_charge > 5) ibat = d.p_charge / d.v_bat;
+    else if (d.p_discharge > 5) ibat = -(d.p_discharge / d.v_bat);
+  }
+  const elIb = document.getElementById('valIbat');
+  elIb.textContent = (ibat > 0 ? '+' : '') + ibat.toFixed(1) + ' A';
+  elIb.style.color = ibat > 0 ? '#34d399' : (ibat < 0 ? '#fbbf24' : '#f8fafc');
+
+  document.getElementById('valSoh').textContent = d.soh > 0 ? d.soh : '--';
+  document.getElementById('valBatCycle').textContent = (d.bms_cycle || (d.regs && d.regs[92])) || '--';
+  document.getElementById('valCellMinV').textContent = (d.bms_cell_min_v || (d.regs && d.regs[86])) || '--';
+  document.getElementById('valCellMaxV').textContent = (d.bms_cell_max_v || (d.regs && d.regs[87])) || '--';
+  document.getElementById('valCellMinT').textContent = (d.bms_cell_min_t || (d.regs && d.regs[88])) || '--';
+  document.getElementById('valCellMaxT').textContent = (d.bms_cell_max_t || (d.regs && d.regs[89])) || '--';
+  document.getElementById('valBmsMaxChg').textContent = d.bms_max_chg_curr || (d.regs && d.regs[82] ? (d.regs[82]/10).toFixed(0) : '--');
+  document.getElementById('valBmsMaxDis').textContent = d.bms_max_dischg_curr || (d.regs && d.regs[83] ? (d.regs[83]/10).toFixed(0) : '--');
+
+  // 3. Grid
+  const gn = (d.p_to_user || 0) - (d.p_to_grid || 0);
+  document.getElementById('valPgridNet').textContent = fmtN(gn);
+  document.getElementById('valVgrid').textContent = (d.v_grid || 0).toFixed(1);
+  document.getElementById('valFgrid').textContent = (d.f_grid || 0).toFixed(2) + ' Hz';
+  document.getElementById('valPtoUser').textContent = fmtN(d.p_to_user) + ' W';
+  document.getElementById('valPtoGrid').textContent = fmtN(d.p_to_grid) + ' W';
+  document.getElementById('valEtoUser').textContent = (d.e_to_user_day || 0).toFixed(1);
+  document.getElementById('valEtoGrid').textContent = (d.e_to_grid_day || 0).toFixed(1);
+
+  const vg = d.v_grid > 50 ? d.v_grid : 220;
+  document.getElementById('valItoUser').textContent = ((d.p_to_user || 0) / vg).toFixed(1) + ' A';
+  document.getElementById('valItoGrid').textContent = ((d.p_to_grid || 0) / vg).toFixed(1) + ' A';
+  document.getElementById('valIgridNet').textContent = (gn / vg).toFixed(1) + ' A';
+  document.getElementById('valPrec').textContent = fmtN(d.p_rec || (d.regs && d.regs[17] ? d.regs[17] : 0)) + ' W';
+  document.getElementById('valErecDay').textContent = (d.regs && d.regs[32] ? (d.regs[32]/10).toFixed(1) : '0.0') + ' kWh';
+
+  // 4. Load
+  document.getElementById('valPload').textContent = fmtN(d.p_load);
+  document.getElementById('valPeps').textContent = fmtN(d.p_eps);
+  document.getElementById('valPinv').textContent = fmtN(d.p_inv);
+  document.getElementById('valTinner').textContent = (d.t_inner || 0);
+  document.getElementById('valTrad1').textContent = (d.t_rad1 || 0);
+  document.getElementById('valTrad2').textContent = (d.t_rad2 || 0);
+  document.getElementById('valStatus').textContent = d.status || 0;
+  document.getElementById('valEload').textContent = (d.e_load_day || 0).toFixed(1) + ' kWh';
+  document.getElementById('valIload').textContent = ((d.p_load || 0) / vg).toFixed(1);
+  document.getElementById('valSeps').textContent = fmtN(d.s_eps || (d.regs && d.regs[25] ? d.regs[25] : d.p_eps)) + ' VA';
+  document.getElementById('valVeps').textContent = ((d.v_eps || (d.regs && d.regs[20] ? d.regs[20]/10 : 0))).toFixed(1) + ' V';
+  document.getElementById('valFeps').textContent = ((d.f_eps || (d.regs && d.regs[23] ? d.regs[23]/100 : 0))).toFixed(2) + ' Hz';
+  document.getElementById('valEepsDay').textContent = (d.e_eps_day || (d.regs && d.regs[35] ? (d.regs[35]/10).toFixed(1) : '0.0')) + ' kWh';
+  document.getElementById('valEinvDay').textContent = (d.regs && d.regs[31] ? (d.regs[31]/10).toFixed(1) : '0.0') + ' kWh';
+
+  document.getElementById('statPvDay').textContent = (d.e_pv_day_total || 0).toFixed(1);
+  document.getElementById('statBatNet').textContent = ((d.e_chg_day || 0) - (d.e_dischg_day || 0) >= 0 ? '+' : '') + ((d.e_chg_day || 0) - (d.e_dischg_day || 0)).toFixed(1);
+  document.getElementById('statGridNet').textContent = ((d.e_to_user_day || 0) - (d.e_to_grid_day || 0)).toFixed(1);
+  document.getElementById('statLoadDay').textContent = (d.e_load_day || 0).toFixed(1);
+
+  // Đồng bộ trạng thái các công tắc gạt
+  let onTeleCount = 0;
+  TELE_NAMES.forEach((name) => {
+    const el = document.querySelector(`.reg-item[data-tele="${name}"]`);
+    if (el) {
+      const isPresent = (d[name] !== undefined);
+      el.classList.toggle('on', isPresent);
+      if (isPresent) onTeleCount++;
+    }
+  });
+  document.getElementById('teleCount').textContent = onTeleCount + ' / 20';
+
+  let onRegCount = 0;
+  REG_NAMES.forEach((rname, idx) => {
+    const el = document.querySelector(`.reg-item[data-reg="${rname}"]`);
+    const valEl = document.getElementById('rval_' + idx);
+    const isPresent = (d[rname] !== undefined);
+    if (el) {
+      el.classList.toggle('on', isPresent);
+      if (isPresent) onRegCount++;
+    }
+    if (valEl) {
+      valEl.textContent = isPresent ? d[rname] : '0';
+    }
+  });
+  document.getElementById('regCount').textContent = onRegCount + ' / 120';
+
+  if (d.p_pv_total !== undefined) {
+    chartPoints.push({
+      pv: d.p_pv_total || 0,
+      bat: (d.p_charge || 0) - (d.p_discharge || 0),
+      grid: (d.p_to_user || 0) - (d.p_to_grid || 0),
+      load: d.p_load || 0
+    });
+    if (chartPoints.length > 50) chartPoints.shift();
+    drawChart();
+  }
+}
+
+function drawChart() {
+  const svg = document.getElementById('powerChart');
+  if (!svg || chartPoints.length < 2) return;
+  const W = 800, H = 260, pl = 45, pr = 15, pt = 15, pb = 25, iw = W - pl - pr, ih = H - pt - pb;
+
+  let mx = 100, mn = 0;
+  chartPoints.forEach(p => {
+    mx = Math.max(mx, p.pv, p.load, Math.abs(p.bat), Math.abs(p.grid));
+    mn = Math.min(mn, p.bat, p.grid);
+  });
+  mx = Math.ceil(mx / 500) * 500;
+  mn = Math.floor(mn / 500) * 500;
+
+  const xs = (i) => pl + (i / (chartPoints.length - 1)) * iw;
+  const ys = (v) => pt + ih - ((v - mn) / (mx - mn || 1)) * ih;
+
+  let h = '';
+  for (let v = mn; v <= mx; v += (mx - mn) / 4) {
+    const y = ys(v);
+    h += `<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="#263554" stroke-dasharray="2,3"/>`;
+    h += `<text x="${pl-6}" y="${y+4}" text-anchor="end" fill="#94a3b8" font-size="10">${Math.round(v)}</text>`;
+  }
+
+  const dl = (key, color) => {
+    let p = '';
+    chartPoints.forEach((d, i) => { p += (i === 0 ? 'M' : 'L') + xs(i).toFixed(1) + ',' + ys(d[key]).toFixed(1) + ' '; });
+    return `<path d="${p}" fill="none" stroke="${color}" stroke-width="2"/>`;
+  };
+
+  h += dl('pv', '#f59e0b') + dl('bat', '#10b981') + dl('grid', '#a855f7') + dl('load', '#3b82f6');
+  if (mn < 0) { const y0 = ys(0); h += `<line x1="${pl}" y1="${y0}" x2="${W-pr}" y2="${y0}" stroke="#64748b"/>`; }
+  svg.innerHTML = h;
+}
+
+// ============================================================================
+// HÀM KIỂM TRA VÀ GỌI CẬP NHẬT OTA TỰ ĐỘNG
+// ============================================================================
+async function checkRemoteUpdate() {
+  if (!currentOtaUrl || currentOtaUrl.length < 10) {
+    toast('Trạm này chưa cài đặt URL update.json!', true);
+    return;
+  }
+
+  const btn = document.getElementById('btnCheckUpdate');
+  const msgBox = document.getElementById('otaMsg');
+  const btnDo = document.getElementById('btnDoOta');
+  const badge = document.getElementById('badgeOtaStatus');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang kiểm tra...';
+  msgBox.innerHTML = 'Đang tải file <code>update.json</code> từ server...';
+
+  try {
+    const res = await fetch(currentOtaUrl + '?t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const info = await res.json();
+
+    const remoteVer = info.version || "";
+    const notes = info.notes || "Không có ghi chú.";
+
+    if (remoteVer && remoteVer !== currentFwVersion) {
+      badge.textContent = '🆕 Có bản mới v' + remoteVer;
+      badge.style.background = 'rgba(16,185,129,0.2)';
+      badge.style.color = '#34d399';
+
+      msgBox.innerHTML = `
+        <div style="font-weight:800; color:#38bdf8; font-size:1rem; margin-bottom:6px;">✨ Phát hiện phiên bản mới: v${remoteVer}</div>
+        <div style="color:var(--muted); font-size:0.85rem; margin-bottom:8px;">Phiên bản hiện tại: <b>v${currentFwVersion || '--'}</b></div>
+        <div style="background:#090d16; padding:10px; border-radius:6px; font-size:0.8rem; color:#cbd5e1; margin-bottom:6px;">
+          <b>Nội dung cập nhật:</b><br>${notes}
+        </div>
+      `;
+      btnDo.style.display = 'inline-block';
+      btnDo.textContent = `🚀 Cập Nhật Lên v${remoteVer}`;
+    } else {
+      badge.textContent = '✅ Đang chạy bản mới nhất';
+      badge.style.background = 'rgba(56,189,248,0.15)';
+      badge.style.color = '#38bdf8';
+      msgBox.innerHTML = `✅ Thiết bị đang chạy phiên bản mới nhất (<b>v${currentFwVersion}</b>). Không cần cập nhật.`;
+      btnDo.style.display = 'none';
+    }
+  } catch(err) {
+    msgBox.innerHTML = `<span style="color:#f87171;">❌ Không thể tải update.json: ${err.message}</span>`;
+    btnDo.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Kiểm Tra Bản Mới';
+  }
+}
+
+function triggerAutoOta() {
+  if (!confirm(`Xác nhận nâng cấp firmware cho trạm [${selectedMac}]?\n\nESP32 sẽ tự tải file .bin, nạp và khởi động lại sau khoảng 30-60 giây.`)) {
+    return;
+  }
+  publishMqttCommand({ cmd: "ota_update" });
+
+  const msgBox = document.getElementById('otaMsg');
+  const btnDo = document.getElementById('btnDoOta');
+  btnDo.disabled = true;
+  msgBox.innerHTML = `
+    <div style="color:#fbbf24; font-weight:700;">
+      ⏳ Đã phát lệnh nâng cấp xuống ESP32!<br>
+      Thiết bị đang tải và nạp Flash OTA. Vui lòng chờ 30 - 60 giây và KHÔNG ngắt nguồn trạm.
+    </div>
+  `;
+}
+
+function remoteRebootEsp() {
+  if (!confirm('Khởi động lại ESP32 từ xa qua MQTT?')) return;
+  publishMqttCommand({ cmd: "reboot" });
+}
+
+function remoteToggleReg(i, rname) {
+  const el = document.querySelector(`.reg-item[data-reg="${rname}"]`);
+  const en = !el.classList.contains('on');
+  el.classList.toggle('on', en);
+  publishMqttCommand({ cmd: "toggle_reg", i: i, e: en });
+}
+
+function remoteToggleAllRegs(en) {
+  document.querySelectorAll('.reg-item[data-reg]').forEach(el => el.classList.toggle('on', en));
+  publishMqttCommand({ cmd: "toggle_all_regs", e: en });
+}
+
+function remoteToggleTele(i, tname) {
+  const el = document.querySelector(`.reg-item[data-tele="${tname}"]`);
+  const en = !el.classList.contains('on');
+  el.classList.toggle('on', en);
+  publishMqttCommand({ cmd: "toggle_tele", i: i, e: en });
+}
+
+function remoteToggleAllTele(en) {
+  document.querySelectorAll('.reg-item[data-tele]').forEach(el => el.classList.toggle('on', en));
+  publishMqttCommand({ cmd: "toggle_all_tele", e: en });
+}
+
+initGrids();
+loadSavedWss();
+</script>
+</body>
+</html>
