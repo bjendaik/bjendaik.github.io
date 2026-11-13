@@ -1,0 +1,34 @@
+{
+  "firmwares": {
+    "esp32": {
+      "version": "2.5.0",
+      "project": "luxpower-listener",
+      "chip": "esp32",
+      "name": "LuxPower Listener ESP32",
+      "url": "https://bjendaik.github.io/firmware/luxpower-listener-2.5.0-esp32.bin",
+      "notes": "Menu Cài đặt Quạt GPIO40, PWM cố định 25kHz: dải nhiệt độ AND công suất, thêm/xóa tối đa 16 dải, map PWM min/max. Quá công suất kẹp max; quá nhiệt độ bỏ dải. Giữ đọc/phát SN, API JSON, dò IP/MAC, solar.local và OTA.",
+      "size": 1557184,
+      "sha256": "e13859387535346d98d6a7d02aa8fd77f072403c917a1d78491b6a746c010ab6"
+    },
+    "esp32s3": {
+      "version": "2.5.0",
+      "project": "luxpower-listener",
+      "chip": "esp32s3",
+      "name": "LuxPower Listener ESP32S3",
+      "url": "https://bjendaik.github.io/firmware/luxpower-listener-2.5.0-esp32s3.bin",
+      "notes": "Menu Cài đặt Quạt GPIO40, PWM cố định 25kHz: dải nhiệt độ AND công suất, thêm/xóa tối đa 16 dải, map PWM min/max. Quá công suất kẹp max; quá nhiệt độ bỏ dải. Giữ đọc/phát SN, API JSON, dò IP/MAC, solar.local và OTA.",
+      "size": 1537728,
+      "sha256": "a0aac83a51834a446a4e18af5b5464d47afc0a1664a9d5b1bb3a3192c8923150"
+    },
+    "esp32c3": {
+      "version": "2.5.0",
+      "project": "luxpower-listener",
+      "chip": "esp32c3",
+      "name": "LuxPower Listener ESP32C3",
+      "url": "https://bjendaik.github.io/firmware/luxpower-listener-2.5.0-esp32c3.bin",
+      "notes": "Menu Cài đặt Quạt GPIO40, PWM cố định 25kHz: dải nhiệt độ AND công suất, thêm/xóa tối đa 16 dải, map PWM min/max. Quá công suất kẹp max; quá nhiệt độ bỏ dải. Giữ đọc/phát SN, API JSON, dò IP/MAC, solar.local và OTA.",
+      "size": 1637568,
+      "sha256": "77b259410a44a04b7574af7379e029780a303aecd894f81f114cf2f01491428f"
+    }
+  }
+}
