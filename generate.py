@@ -5,7 +5,7 @@ def expand(path):
     return re.sub(r'#include "([^\"]+)"',lambda m:expand(root/m[1]),path.read_text())
 def page(name):
     s=expand(root/name)
-    return ''.join(m[2] for m in re.finditer(r'R"([A-Za-z0-9_]*)\((.*?)\)\1"',s,re.S)).replace('__CHIP__','ESP32').replace('__FW_VERSION__','2.6.0')
+    return ''.join(m[2] for m in re.finditer(r'R"([A-Za-z0-9_]*)\((.*?)\)\1"',s,re.S)).replace('__CHIP__','ESP32').replace('__FW_VERSION__','2.7.0')
 dashboard=page('LuxFlow.h')
 dashboard=re.sub(r'<form id="fwUploadForm".*?</form>','',dashboard,flags=re.S)
 dashboard=dashboard.replace('Chọn kiểm tra online hoặc tải file .bin offline bên dưới.','Kiểm tra và cập nhật online qua ESP32.').replace('Chọn kiểm tra online hoặc tải file .bin offline.','Kiểm tra và cập nhật online qua ESP32.').replace('bằng file .bin trong mạng nội bộ hoặc qua Internet.','qua Internet bằng manifest đã cài trên ESP32.')
