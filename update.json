@@ -1,7 +1,7 @@
 {
   "firmwares": {
     "esp32": {
-      "version": "2.5.1",
+      "version": "2.5.0",
       "project": "luxpower-listener",
       "chip": "esp32",
       "name": "LuxPower Listener ESP32",
@@ -11,7 +11,7 @@
       "sha256": "e13859387535346d98d6a7d02aa8fd77f072403c917a1d78491b6a746c010ab6"
     },
     "esp32s3": {
-      "version": "2.5.1",
+      "version": "2.5.0",
       "project": "luxpower-listener",
       "chip": "esp32s3",
       "name": "LuxPower Listener ESP32S3",
