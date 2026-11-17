@@ -1,14 +1,14 @@
 {
   "firmwares": {
     "esp32s3": {
-      "version": "2.9.0",
+      "version": "2.9.2",
       "project": "luxpower-listener",
       "chip": "esp32s3",
       "name": "LuxPower ESP32-S3 N16R8",
-      "url": "https://bjendaik.github.io/FW/2.9.0/luxpower-listener-2.9.0-esp32s3-n16r8.bin",
-      "notes": "ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI. Bốn ô PV/lưới/pin/tải vuông, icon cùng hàng công suất; PV1/PV2 sản lượng riêng+tổng. Dòng pin luôn xấp xỉ P/V; thêm BMS/cell/Ah/chu kỳ, Smart Load khi khác0, nhiệt độ1/2, Bus1/2 và hiệu suất chuyển đổi có điều kiện. Giữ MQTT chỉ gửi theo menu đang xem, quạt25kHz, sổ điện EVN và OTA.",
-      "size": 1653392,
-      "sha256": "a5d8ddd82607983578b647142d3786fcac9f0026d6eacd79e20a529c34f18297"
+      "url": "https://bjendaik.github.io/FW/2.9.2/luxpower-listener-2.9.2-esp32s3-n16r8.bin",
+      "notes": "Ảnh LuxPower dựng theo mẫu được nhúng sẵn, không tải ảnh từ ngoài. ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI. Bốn ô vuông ở bốn góc, tên căn giữa; biến tần lớn có vùng giữa riêng. Chi tiết PV/lưới/pin/tải chỉ giữ thông số phía trên, không bảng thanh ghi/dòng đếm. Tỷ lệ công suất=max(Load−lưới mua,0)/PV hoặc pin xả; có thêm tỷ lệ tổngPV+pin xả. Giữ sản lượng PV1/PV2, BMS/cell/Ah/chu kỳ, Smart Load, nhiệt độ và Bus. Giữ MQTT chỉ gửi theo menu đang xem, quạt25kHz, sổ điện EVN và OTA.",
+      "size": 1666240,
+      "sha256": "fc71ef6dbc25b6879b956b5ee8ca6a42e6624f46058922772f67309cd36a35e8"
     }
   }
 }
