@@ -1,14 +1,14 @@
 {
   "firmwares": {
     "esp32s3": {
-      "version": "2.9.2",
+      "version": "2.9.3",
       "project": "luxpower-listener",
       "chip": "esp32s3",
       "name": "LuxPower ESP32-S3 N16R8",
-      "url": "https://bjendaik.github.io/FW/2.9.2/luxpower-listener-2.9.2-esp32s3-n16r8.bin",
-      "notes": "Ảnh LuxPower dựng theo mẫu được nhúng sẵn, không tải ảnh từ ngoài. ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI. Bốn ô vuông ở bốn góc, tên căn giữa; biến tần lớn có vùng giữa riêng. Chi tiết PV/lưới/pin/tải chỉ giữ thông số phía trên, không bảng thanh ghi/dòng đếm. Tỷ lệ công suất=max(Load−lưới mua,0)/PV hoặc pin xả; có thêm tỷ lệ tổngPV+pin xả. Giữ sản lượng PV1/PV2, BMS/cell/Ah/chu kỳ, Smart Load, nhiệt độ và Bus. Giữ MQTT chỉ gửi theo menu đang xem, quạt25kHz, sổ điện EVN và OTA.",
-      "size": 1666240,
-      "sha256": "fc71ef6dbc25b6879b956b5ee8ca6a42e6624f46058922772f67309cd36a35e8"
+      "url": "https://bjendaik.github.io/FW/2.9.3/luxpower-listener-2.9.3-esp32s3-n16r8.bin",
+      "notes": "Ảnh nhỏ hơn10%, nhiệt độ1/2 ở hai bên LCD và giờ cập nhật trong nắp dưới. Tên thẻ dưới icon, mô tả dưới công suất. Cả năm chi tiết chỉ có thông số tóm tắt, bỏ bảng/đếm/thông báo chờ thanh ghi. Giữ ảnh nhúng, công thức tải trừ lưới, MQTT theo menu, quạt25kHz, TCP/SN và sổ EVN. Chỉ ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI.",
+      "size": 1631712,
+      "sha256": "97f965c93d1cfb1d04f8ea316c0997e319d031be59646d720b1222fc3d66e021"
     }
   }
 }
