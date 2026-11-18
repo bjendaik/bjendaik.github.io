@@ -1,14 +1,14 @@
 {
   "firmwares": {
     "esp32s3": {
-      "version": "2.9.4",
+      "version": "2.9.6",
       "project": "luxpower-listener",
       "chip": "esp32s3",
       "name": "LuxPower ESP32-S3 N16R8",
-      "url": "https://bjendaik.github.io/FW/2.9.4/luxpower-listener-2.9.4-esp32s3-n16r8.bin",
-      "notes": "Banner GitHub gọn: chỉ chọn ESP32 online, bỏ dòng thông tin/bộ đếm/Device ID thủ công/nút thêm-xóa. Tự chuyển máy khi offline, xóa trạng thái online cũ khi MQTT ngắt. Bỏ dấu xấp xỉ ở dòng điện PV/pin/lưới/tải, giữ công thức tính. Nhãn EMQX đổi thành MQTT; chi tiết biến tần bỏ Nghịch lưu, Chỉnh lưu và Dòng RMS nghịch lưu. Giữ giao diện ảnh/T1/T2/giờ, thông số, MQTT theo menu, quạt25kHz, TCP/SN và sổ EVN. Chỉ ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI.",
-      "size": 1631328,
-      "sha256": "d050838a5455eb20840d60754613cb24e0ba173e18d39d2fe322c4a6fe536d27"
+      "url": "https://bjendaik.github.io/FW/2.9.6/luxpower-listener-2.9.6-esp32s3-n16r8.bin",
+      "notes": "Máy tính đặt sơ đồ trái, điện năng và ước tính chi phí phải; điện thoại giữ bố cục2.9.5. Không có dòng chảy thì dây màu và mũi tên ẩn; có công suất thì chevron chuyển động đúng chiều sạc/xả/mua/bán. Giữ dữ liệu, bảng giá, MQTT theo menu, TCP/SN, quạt25kHz và sổ EVN. Chỉ ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI.",
+      "size": 1636400,
+      "sha256": "d10f5b32cccb8edb1415ae3343b6ef6eae0b1998c58cc51a2768113da08218e2"
     }
   }
 }
