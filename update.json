@@ -1,14 +1,14 @@
 {
   "firmwares": {
     "esp32s3": {
-      "version": "2.9.6",
+      "version": "2.9.7",
       "project": "luxpower-listener",
       "chip": "esp32s3",
       "name": "LuxPower ESP32-S3 N16R8",
-      "url": "https://bjendaik.github.io/FW/2.9.6/luxpower-listener-2.9.6-esp32s3-n16r8.bin",
-      "notes": "Máy tính đặt sơ đồ trái, điện năng và ước tính chi phí phải; điện thoại giữ bố cục2.9.5. Không có dòng chảy thì dây màu và mũi tên ẩn; có công suất thì chevron chuyển động đúng chiều sạc/xả/mua/bán. Giữ dữ liệu, bảng giá, MQTT theo menu, TCP/SN, quạt25kHz và sổ EVN. Chỉ ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI.",
-      "size": 1636400,
-      "sha256": "d10f5b32cccb8edb1415ae3343b6ef6eae0b1998c58cc51a2768113da08218e2"
+      "url": "https://bjendaik.github.io/FW/2.9.7/luxpower-listener-2.9.7-esp32s3-n16r8.bin",
+      "notes": "Bỏ dòng Nguồn cập nhật trên web LAN/GitHub, giữ OTA qua URL trong code. Ô chọn ESP32 online bo tròn, rộng theo tên. Chi tiết pin thêm W/kW bên cạnh giới hạn dòng sạc/xả, tính từ điện áp pin hiện tại nhân dòng BMS. Giữ bố cục, dòng pin P/V, mũi tên theo công suất, MQTT theo menu, TCP/SN, quạt25kHz và sổ EVN. Chỉ ESP32-S3 N16R8 Flash16MB/PSRAM8MB OPI.",
+      "size": 1636320,
+      "sha256": "d4cc3a00724c8d855a38e296f39086310ff2d568a82a0f69fd33b769cb9e4632"
     }
   }
 }
